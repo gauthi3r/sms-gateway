@@ -20,7 +20,7 @@ Interface web Flask pour envoyer et recevoir des SMS via un routeur **Huawei LTE
 ## Installation rapide
 
 ```bash
-git clone https://github.com/gauthi3r/SMS-Gateway.git
+git clone https://github.com/Wr1ghtShade/SMS-Gateway.git
 cd SMS-Gateway
 chmod +x install.sh
 sudo ./install.sh

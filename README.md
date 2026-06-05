@@ -22,11 +22,11 @@ Interface web Flask pour envoyer et recevoir des SMS via un routeur **4G/5G** (H
 
 L'onglet **⚙️ Config** permet de connecter n'importe quel routeur 4G/5G supporté, directement depuis l'interface web — sans toucher aux fichiers de configuration.
 
-| Marque | Bibliothèque | Inbox | Outbox |
-|--------|-------------|-------|--------|
-| Huawei (B525, B535, B818…) | `huawei-lte-api` | ✅ | ✅ |
-| Netgear (LB1120, LB2120, MR1100…) | `eternalegypt` | ✅ | ❌ |
-| GL.iNet LTE/5G (X3000, XE3000, X750…) | `python-glinet` | ✅ | ❌ |
+| Marque | Modèles testés / compatibles | Bibliothèque | Inbox | Outbox |
+|--------|------------------------------|-------------|-------|--------|
+| **Huawei** | B525s, B535, B818, B628, B715, E5186… | `huawei-lte-api` | ✅ | ✅ |
+| **Netgear** | LB1120, LB2120, LB1111, MR1100, MR2100… | `eternalegypt` | ✅ | ❌ |
+| **GL.iNet** | X3000, XE3000, X750 (Spitz), E750 (Mudi), MiFi, AP1300LTE… | `python-glinet` | ✅ | ❌ |
 
 **Champs de connexion :**
 - **Adresse IP** du routeur sur le réseau local
@@ -45,7 +45,7 @@ Le bouton **Tester** vérifie la connexion sans sauvegarder. Le bouton **Sauvega
 |---------------|---------------------------------------------------------------|
 | OS            | Debian 11+, Raspbian (aarch64)                                |
 | Python        | 3.9+                                                          |
-| Routeur       | Huawei ou Netgear LTE/5G sur le réseau local                  |
+| Routeur       | Huawei, Netgear ou GL.iNet LTE/5G sur le réseau local         |
 | Accès internet | Pour apt + pip (installation uniquement)                     |
 
 ---
@@ -78,7 +78,7 @@ Aller dans l'onglet **⚙️ Config**, renseigner la marque, l'IP et les identif
 >   "pass": "votre_mot_de_passe"
 > }
 > ```
-> Valeurs possibles pour `brand` : `huawei`, `netgear`.
+> Valeurs possibles pour `brand` : `huawei`, `netgear`, `glinet`.
 
 ---
 
@@ -91,7 +91,8 @@ Aller dans l'onglet **⚙️ Config**, renseigner la marque, l'IP et les identif
 │   ├── __init__.py        # Factory get_adapter()
 │   ├── base.py            # Classe abstraite RouterAdapter
 │   ├── huawei.py          # Huawei LTE (huawei-lte-api)
-│   └── netgear.py         # Netgear LTE (eternalegypt)
+│   ├── netgear.py         # Netgear LTE (eternalegypt)
+│   └── glinet.py          # GL.iNet LTE/5G (python-glinet)
 ├── templates/index.html   # Frontend HTML/CSS/JS
 ├── static/favicon.svg
 ├── requirements.txt

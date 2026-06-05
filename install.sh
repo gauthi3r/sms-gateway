@@ -19,6 +19,7 @@ TOTAL_STEPS=7
 APP_NAME="gateway-sms"
 APP_DIR="/var/www/sms-gateway"
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OWNER="${SUDO_USER:-$(logname 2>/dev/null || whoami)}"
 
 echo -e "\n${BOLD}SMS Gateway — Installation${NC}\n"
 
@@ -92,13 +93,13 @@ ok "Service systemd enregistré : gateway-sms.service"
 
 step 6 "Application des permissions"
 
-chown -R gauthi3r:www-data "$APP_DIR"
+chown -R "${OWNER}:www-data" "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 750 {} \;
 find "$APP_DIR" -type f -exec chmod 640 {} \;
 find "$APP_DIR/venv/bin" -type f -exec chmod 750 {} \;
 chmod 640 "$APP_DIR/.env"
 chmod +x  "$APP_DIR/fix-perms.sh"
-ok "Permissions appliquées (gauthi3r:www-data)."
+ok "Permissions appliquées (${OWNER}:www-data)."
 
 # ============================================================
 

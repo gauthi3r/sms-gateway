@@ -1,0 +1,24 @@
+# Secrets — ne jamais versionner
+.env
+
+# Environnement Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Claude Code
+.claude/
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

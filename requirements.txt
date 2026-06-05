@@ -1,0 +1,6 @@
+Flask>=3.0.0
+Flask-Limiter>=4.0.0
+huawei-lte-api>=1.11.0
+python-dotenv>=1.0.0
+pycryptodomex>=3.20.0
+requests>=2.31.0

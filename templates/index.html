@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Gateway</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <style>
+        /* --- THEME ET VARIABLES --- */
+        :root {
+            --bg-color: #f4f6f8; --card-bg: #ffffff; --text-main: #1a1a1a; --text-muted: #666;
+            --input-bg: #fff; --input-border: #dfe3e8; --input-text: #000;
+            --primary: #007bff; --primary-hover: #0056b3;
+            --danger: #dc3545; --danger-hover: #bb2d3b;
+            --shadow: 0 4px 12px rgba(0,0,0,0.1); --border-radius: 12px;
+            --preview-bg: #2d2d2d; --preview-text: #00ff00;
+            --table-head-bg: #f1f1f1; --table-row-hover: #f9f9f9;
+        }
+        body.dark-mode {
+            --bg-color: #121212; --card-bg: #1e1e1e; --text-main: #e0e0e0; --text-muted: #a0a0a0;
+            --input-bg: #2d2d2d; --input-border: #444; --input-text: #fff;
+            --primary: #0d6efd; --primary-hover: #0b5ed7;
+            --danger: #e74c3c; --danger-hover: #c0392b;
+            --shadow: 0 4px 12px rgba(0,0,0,0.5);
+            --table-head-bg: #333; --table-row-hover: #2a2a2a;
+        }
+        body.theme-cyber {
+            --bg-color: #0b0c10; --card-bg: #1f2833; --text-main: #c5c6c7; --text-muted: #66fcf1;
+            --input-bg: #0b0c10; --input-border: #45f3ff; --input-text: #66fcf1;
+            --primary: #ff007f; --primary-hover: #e0006c;
+            --danger: #ff3333; --danger-hover: #cc0000;
+            --shadow: 0 0 15px rgba(102, 252, 241, 0.4);
+            --table-head-bg: #15202b; --table-row-hover: #2c3540;
+            --preview-bg: #0b0c10; --preview-text: #39ff14;
+        }
+        body.theme-dracula {
+            --bg-color: #282a36; --card-bg: #44475a; --text-main: #f8f8f2; --text-muted: #6272a4;
+            --input-bg: #282a36; --input-border: #ff79c6; --input-text: #f8f8f2;
+            --primary: #bd93f9; --primary-hover: #ab7fe6;
+            --danger: #ff5555; --danger-hover: #e04444;
+            --shadow: 0 4px 12px rgba(0,0,0,0.5);
+            --table-head-bg: #343746; --table-row-hover: #4d5167;
+            --preview-bg: #282a36; --preview-text: #50fa7b;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: var(--bg-color); color: var(--text-main); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; transition: background 0.3s; }
+
+        .card { background: var(--card-bg); padding: 2rem 2rem 1.2rem; border-radius: var(--border-radius); box-shadow: var(--shadow); width: 100%; max-width: 650px; position: relative; max-height: 95vh; overflow-y: auto; }
+
+        .theme-switcher { position: absolute; top: 14px; right: 14px; display: flex; gap: 5px; }
+        .theme-switcher button { background: none; border: 1px solid var(--input-border); font-size: 0.8rem; cursor: pointer; padding: 2px; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; transition: background 0.2s, transform 0.2s; }
+        .theme-switcher button:hover { background: rgba(0,0,0,0.05); transform: scale(1.1); }
+        body.dark-mode .theme-switcher button:hover,
+        body.theme-cyber .theme-switcher button:hover,
+        body.theme-dracula .theme-switcher button:hover { background: rgba(255,255,255,0.1); }
+        .theme-switcher button.active { border-color: var(--primary); background: rgba(0, 123, 255, 0.1); }
+
+        .version-tag { display: block; text-align: right; margin-top: 1rem; font-size: 0.7rem; color: var(--text-muted); opacity: 0.6; font-family: monospace; }
+
+        h1 { margin: 0 0 0.8rem 0; text-align: center; font-size: 1.5rem; }
+
+        /* ROUTER STATUS */
+        .router-status { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 1.2rem; padding: 7px 12px; background: rgba(0,0,0,0.03); border-radius: 8px; font-size: 0.8rem; color: var(--text-muted); }
+        body.dark-mode .router-status, body.theme-cyber .router-status, body.theme-dracula .router-status { background: rgba(255,255,255,0.05); }
+        .router-status span { display: flex; align-items: center; gap: 4px; }
+        .router-status .rs-error { color: var(--danger); font-style: italic; }
+
+        /* TABS */
+        .tabs { display: flex; margin-bottom: 1.5rem; border-bottom: 2px solid var(--input-border); }
+        .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; color: var(--text-muted); font-weight: 500; transition: 0.3s; }
+        .tab:hover { color: var(--primary); background: rgba(0,0,0,0.02); }
+        .tab.active { color: var(--primary); border-bottom: 2px solid var(--primary); font-weight: 700; }
+
+        /* FORMS */
+        .form-group { margin-bottom: 1.2rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
+        input, textarea, select { width: 100%; padding: 12px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--input-text); border-radius: 8px; box-sizing: border-box; font-size: 1rem; }
+        textarea { height: 100px; resize: vertical; }
+
+        /* CHAR COUNTER */
+        .char-counter { text-align: right; font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; transition: color 0.2s; }
+        .char-counter.warn { color: #fd7e14; }
+        .char-counter.danger { color: var(--danger); font-weight: 600; }
+
+        /* INBOX / OUTBOX CONTAINER */
+        #inbox-content, #outbox-content { max-height: 340px; overflow-y: auto; border: 1px solid var(--input-border); border-radius: 8px; }
+
+        /* INBOX TABLE */
+        .inbox-controls { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .inbox-search { flex: 1; padding: 5px 10px; border: 1px solid var(--input-border); border-radius: 5px; background: var(--input-bg); color: var(--input-text); font-size: 0.85rem; width: auto; }
+        .btn-refresh { background: none; border: 1px solid var(--input-border); color: var(--text-main); padding: 5px 10px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
+        .btn-refresh:hover { background: var(--input-border); }
+        .pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 4px; font-size: 0.85rem; }
+        .pagination button { background: none; border: 1px solid var(--input-border); color: var(--text-main); padding: 3px 12px; border-radius: 5px; cursor: pointer; transition: background 0.2s; }
+        .pagination button:hover:not(:disabled) { background: var(--input-border); }
+        .pagination button:disabled { opacity: 0.35; cursor: not-allowed; }
+        .pagination span { color: var(--text-muted); min-width: 55px; text-align: center; }
+
+        table.inbox-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        table.inbox-table th { position: sticky; top: 0; background: var(--table-head-bg); padding: 10px; text-align: left; border-bottom: 2px solid var(--input-border); font-weight: 600; color: var(--text-muted); z-index: 1; }
+        table.inbox-table td { padding: 10px; border-bottom: 1px solid var(--input-border); vertical-align: top; }
+        table.inbox-table tr:hover { background-color: var(--table-row-hover); }
+
+        .sender-num { font-weight: bold; color: var(--primary); display: block; margin-bottom: 2px; }
+        .msg-date { font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
+        .btn-delete { background: none; border: none; cursor: pointer; font-size: 1.2rem; transition: 0.2s; padding: 0 5px; }
+        .btn-delete:hover { transform: scale(1.2); }
+        .btn-reply { background: none; border: none; cursor: pointer; font-size: 1.1rem; transition: 0.2s; padding: 0 3px; opacity: 0.6; }
+        .btn-reply:hover { transform: scale(1.2); opacity: 1; }
+
+        /* GROUPES */
+        .group-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+        .group-bar select { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid var(--input-border); border-radius: 5px; background: var(--input-bg); color: var(--input-text); font-size: 0.82rem; width: auto; }
+        .btn-group { background: none; border: 1px solid var(--input-border); color: var(--text-main); padding: 4px 9px; border-radius: 5px; cursor: pointer; font-size: 0.82rem; white-space: nowrap; transition: background 0.2s; }
+        .btn-group:hover { background: var(--input-border); }
+        .group-status { font-size: 0.8rem; margin-bottom: 8px; min-height: 1em; }
+        .new-group-panel { background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 8px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+        .new-group-panel input, .new-group-panel textarea { padding: 6px 10px; font-size: 0.85rem; }
+        .new-group-panel textarea { height: 70px; }
+        .new-group-panel-btns { display: flex; gap: 6px; }
+
+        /* INFO BOX & PREVIEW */
+        .info-box { background: rgba(0, 123, 255, 0.1); border-left: 4px solid var(--primary); padding: 12px; margin-bottom: 15px; font-size: 0.85rem; color: var(--text-main); line-height: 1.4; border-radius: 4px; }
+        .preview-box { background: var(--preview-bg); color: var(--preview-text); padding: 10px 15px; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; margin-bottom: 15px; display: none; max-height: 120px; overflow-y: auto; border: 1px solid #444; }
+
+        /* BUTTONS */
+        button.btn-send { width: 100%; padding: 14px; background-color: var(--primary); color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: background 0.3s; margin-top: 10px; }
+        button.btn-send:hover { background-color: var(--primary-hover); }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn-danger-action { background-color: var(--danger) !important; color: white !important; font-weight: 600; border: none !important; padding: 6px 12px; border-radius: 5px; cursor: pointer; transition: background 0.3s; }
+        .btn-danger-action:hover { background-color: var(--danger-hover) !important; }
+
+        /* PROGRESS & LOGS */
+        #progress-area { margin-top: 1.5rem; display: none; transition: opacity 0.6s ease; }
+        .progress-bar { width: 100%; background: var(--input-border); height: 8px; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #28a745; width: 0%; transition: width 0.3s; }
+        .status-text { text-align: center; font-size: 0.9rem; margin-top: 8px; color: var(--text-muted); }
+        .progress-ticker { margin-top: 6px; text-align: center; font-size: 0.82rem; min-height: 1.2em; }
+        .log-ok { color: #28a745; } .log-err { color: #dc3545; }
+
+        .hidden { display: none; }
+
+        /* ── RESPONSIVE ──────────────────────────────────────── */
+        @media (max-width: 600px) {
+            body { align-items: flex-start; padding: 0; }
+            .card { padding: 1rem 1rem 1rem; border-radius: 0; max-height: none; min-height: 100svh; box-shadow: none; }
+            h1 { margin-top: 2.2rem; font-size: 1.2rem; }
+            .tab { padding: 10px 3px; font-size: 0.76rem; }
+            .inbox-controls { flex-wrap: wrap; }
+            table.inbox-table { font-size: 0.82rem; }
+            table.inbox-table td, table.inbox-table th { padding: 7px 6px; }
+            .group-bar { gap: 4px; }
+            .btn-group { padding: 4px 7px; font-size: 0.78rem; }
+        }
+
+        @media (max-width: 380px) {
+            .tab { font-size: 0.68rem; padding: 8px 2px; }
+            .theme-switcher { gap: 3px; right: 8px; }
+            .theme-switcher button { width: 22px; height: 22px; font-size: 0.72rem; }
+            h1 { font-size: 1.1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="theme-switcher">
+            <button id="btn-notif" onclick="requestNotifPermission()" title="Activer les notifications SMS">🔕</button>
+            <button id="btn-theme-light" onclick="setTheme('light')" title="Thème Clair">☀️</button>
+            <button id="btn-theme-dark" onclick="setTheme('dark')" title="Thème Sombre">🌙</button>
+            <button id="btn-theme-cyber" onclick="setTheme('cyber')" title="Thème Cyber">🤖</button>
+            <button id="btn-theme-dracula" onclick="setTheme('dracula')" title="Thème Dracula">🧛</button>
+        </div>
+        <h1>💬🎯 SMS Hub</h1>
+
+        <div id="router-status" class="router-status">
+            <span style="font-style:italic;">Chargement...</span>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" id="tab-simple" onclick="setMode('simple', this)">✉️ Simple</div>
+            <div class="tab" onclick="setMode('bulk_simple', this)">📂 File</div>
+            <div class="tab" onclick="setMode('bulk_custom', this)">🛠️ Expert</div>
+            <div class="tab" onclick="setMode('inbox', this); loadInbox(1);">📥 Inbox</div>
+            <div class="tab" onclick="setMode('outbox', this); loadOutbox(1);">📤 Outbox</div>
+        </div>
+
+        <div id="view-simple" class="view">
+            <div class="info-box">
+                Vous pouvez mettre plusieurs numéros séparés par un point-virgule <code>;</code>
+            </div>
+            <div class="form-group">
+                <label>Numéro(s)</label>
+                <input type="text" id="simple-num" placeholder="0611111111; 0622222222">
+            </div>
+            <div class="form-group">
+                <label>Répétition (Nombre d'envois)</label>
+                <select id="simple-repeat">
+                    <option value="1" selected>1 fois (Normal)</option>
+                    <option value="2">2 fois</option>
+                    <option value="3">3 fois</option>
+                    <option value="4">4 fois</option>
+                    <option value="5">5 fois</option>
+                    <option value="6">6 fois</option>
+                    <option value="7">7 fois</option>
+                    <option value="8">8 fois</option>
+                    <option value="9">9 fois</option>
+                    <option value="10">10 fois (Spam !)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Message</label>
+                <textarea id="simple-msg" placeholder="Votre message..." oninput="updateCharCounter(this, 'counter-simple')"></textarea>
+                <div class="char-counter" id="counter-simple">0 / 160 — 1 SMS</div>
+            </div>
+            <button class="btn-send" onclick="processSend()">Envoyer 🚀</button>
+        </div>
+
+        <div id="view-bulk_simple" class="view hidden">
+            <div class="info-box">
+                Chargez un fichier <strong>.txt</strong> (un numéro par ligne).
+            </div>
+            <div class="form-group">
+                <label>Fichier de numéros (.txt)</label>
+                <input type="file" id="file-simple" accept=".txt" onchange="previewFile('file-simple', 'preview-simple')">
+            </div>
+            <div id="preview-simple" class="preview-box"></div>
+            <div class="form-group">
+                <label>Message pour tous</label>
+                <textarea id="msg-simple" placeholder="Ce message sera envoyé à toute la liste..." oninput="updateCharCounter(this, 'counter-bulk-simple')"></textarea>
+                <div class="char-counter" id="counter-bulk-simple">0 / 160 — 1 SMS</div>
+            </div>
+            <div class="form-group">
+                <label>Délai entre envois</label>
+                <select id="delay-bulk-simple">
+                    <option value="0.5">0.5s — Rapide</option>
+                    <option value="1" selected>1s — Recommandé</option>
+                    <option value="2">2s — Prudent</option>
+                    <option value="5">5s — Très prudent</option>
+                </select>
+            </div>
+            <button class="btn-send" onclick="processSend()">Envoyer Liste 🚀</button>
+        </div>
+
+        <div id="view-bulk_custom" class="view hidden">
+            <div class="info-box">
+                <strong>Format :</strong> <code>06xxxxxxxx;Message spécifique</code>
+            </div>
+            <div class="group-bar">
+                <span style="font-size:0.82rem;white-space:nowrap;">📋 Groupe :</span>
+                <select id="group-select-custom"></select>
+                <button class="btn-group" onclick="useGroup('custom')">Charger</button>
+                <button class="btn-group" onclick="deleteGroup('custom')" title="Supprimer le groupe sélectionné">🗑️</button>
+                <button class="btn-group" onclick="toggleNewGroupPanel('custom')">＋ Nouveau</button>
+            </div>
+            <div id="new-group-panel-custom" class="new-group-panel hidden">
+                <input type="text" id="group-name-custom" placeholder="Nom du groupe (ex: Boulot)">
+                <textarea id="group-numbers-custom" placeholder="Un numéro par ligne&#10;0611111111&#10;0622222222"></textarea>
+                <div class="new-group-panel-btns">
+                    <button class="btn-group" onclick="createGroup('custom')">💾 Créer</button>
+                    <button class="btn-group" onclick="toggleNewGroupPanel('custom')">Annuler</button>
+                </div>
+            </div>
+            <div id="group-status-custom" class="group-status"></div>
+            <div class="form-group">
+                <label>Fichier structuré (.txt) <span style="font-weight:normal;color:var(--text-muted);">— optionnel si groupe chargé</span></label>
+                <input type="file" id="file-custom" accept=".txt" onchange="previewFile('file-custom', 'preview-custom')">
+            </div>
+            <div id="preview-custom" class="preview-box"></div>
+            <div class="form-group">
+                <label>Message de secours (Fallback)</label>
+                <textarea id="msg-custom" placeholder="Message utilisé par défaut..." oninput="updateCharCounter(this, 'counter-bulk-custom')"></textarea>
+                <div class="char-counter" id="counter-bulk-custom">0 / 160 — 1 SMS</div>
+            </div>
+            <div class="form-group">
+                <label>Délai entre envois</label>
+                <select id="delay-bulk-custom">
+                    <option value="0.5">0.5s — Rapide</option>
+                    <option value="1" selected>1s — Recommandé</option>
+                    <option value="2">2s — Prudent</option>
+                    <option value="5">5s — Très prudent</option>
+                </select>
+            </div>
+            <button class="btn-send" onclick="processSend()">Envoyer Custom 🚀</button>
+        </div>
+
+        <div id="view-inbox" class="view hidden">
+            <div class="inbox-controls">
+                <input type="search" class="inbox-search" id="inbox-search" placeholder="🔍 Filtrer expéditeur / contenu…" oninput="filterMessages('inbox-content', 'inbox-search')">
+                <button class="btn-refresh" onclick="loadInbox(inboxPage)">🔄</button>
+            </div>
+            <div id="inbox-content">
+                <div style="text-align:center; padding:20px;">Chargement des messages...</div>
+            </div>
+            <div class="pagination" id="inbox-pagination"></div>
+        </div>
+
+        <div id="view-outbox" class="view hidden">
+            <div class="inbox-controls">
+                <button class="btn-danger-action" onclick="deleteAllSent()">🗑️ Tout Supprimer</button>
+                <input type="search" class="inbox-search" id="outbox-search" placeholder="🔍 Filtrer destinataire / contenu…" oninput="filterMessages('outbox-content', 'outbox-search')">
+                <button class="btn-refresh" onclick="loadOutbox(outboxPage)">🔄</button>
+            </div>
+            <div id="outbox-content">
+                <div style="text-align:center; padding:20px;">Chargement des messages...</div>
+            </div>
+            <div class="pagination" id="outbox-pagination"></div>
+        </div>
+
+        <div id="progress-area">
+            <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
+            <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-top:8px;">
+                <div class="status-text" id="status-text" style="margin-top:0;">Prêt</div>
+                <button id="btn-stop" class="btn-danger-action hidden" onclick="stopSend()">⏹ Stop</button>
+            </div>
+            <div class="progress-ticker" id="progress-ticker"></div>
+        </div>
+        <div class="version-tag">1.00.28</div>
+    </div>
+
+    <script>
+        const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+
+        let currentMode = 'simple';
+        let isSending   = false;
+        let inboxPage   = 1;
+        let outboxPage  = 1;
+        let notifKnownIndices = null;
+        let unreadCount = 0;
+        const loadedGroup = { simple: null, custom: null };
+
+        function updateTabBadge() {
+            document.title = unreadCount > 0 ? `(${unreadCount}) SMS Hub` : 'SMS Hub';
+        }
+
+        // THEME SWITCHER
+        function setTheme(theme) {
+            document.body.classList.remove('dark-mode', 'theme-cyber', 'theme-dracula');
+            document.querySelectorAll('.theme-switcher button').forEach(btn => btn.classList.remove('active'));
+
+            if (theme === 'dark') {
+                document.body.classList.add('dark-mode');
+                document.getElementById('btn-theme-dark').classList.add('active');
+            } else if (theme === 'cyber') {
+                document.body.classList.add('theme-cyber');
+                document.getElementById('btn-theme-cyber').classList.add('active');
+            } else if (theme === 'dracula') {
+                document.body.classList.add('theme-dracula');
+                document.getElementById('btn-theme-dracula').classList.add('active');
+            } else {
+                document.getElementById('btn-theme-light').classList.add('active');
+            }
+
+            localStorage.setItem('theme', theme);
+        }
+        setTheme(localStorage.getItem('theme') || 'light');
+
+        // CHANGEMENT D'ONGLET
+        function setMode(mode, el) {
+            currentMode = mode;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            if (el) el.classList.add('active');
+
+            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+            document.getElementById('view-' + mode).classList.remove('hidden');
+
+            if (!isSending) document.getElementById('progress-area').style.display = 'none';
+        }
+
+        // COMPTEUR DE CARACTÈRES SMS
+        // GSM-7 : 160 chars/SMS (153 si multipart) — Unicode : 70 chars/SMS (67 si multipart)
+        const GSM7 = new Set('@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà');
+
+        function isGSM7(text) {
+            return [...text].every(c => GSM7.has(c));
+        }
+
+        function updateCharCounter(textarea, counterId) {
+            const text = textarea.value;
+            const len = text.length;
+            const unicode = !isGSM7(text);
+            const smsLen = unicode ? 70 : 160;
+            const smsLenMulti = unicode ? 67 : 153;
+            const smsCount = len === 0 ? 1 : len <= smsLen ? 1 : Math.ceil((len - smsLen) / smsLenMulti) + 1;
+            const remaining = smsCount === 1 ? smsLen - len : (smsCount * smsLenMulti + (smsLen - smsLenMulti)) - len;
+            const label = unicode ? '⚠️ Unicode' : '';
+
+            const el = document.getElementById(counterId);
+            el.textContent = `${len} / ${smsLen} — ${smsCount} SMS${remaining < 20 ? ' (' + remaining + ' restants)' : ''}${label ? ' · ' + label : ''}`;
+            el.className = 'char-counter' + (len > smsLen * 2 ? ' danger' : len > smsLen ? ' warn' : '');
+        }
+
+        // STATUT ROUTEUR
+        async function loadRouterStatus() {
+            const el = document.getElementById('router-status');
+            try {
+                const res = await fetch('/router/status');
+                const d = await res.json();
+                if (d.status === 'ok') {
+                    const bars = ['▱▱▱▱▱','▰▱▱▱▱','▰▰▱▱▱','▰▰▰▱▱','▰▰▰▰▱','▰▰▰▰▰'][Math.min(d.signal_bars, 5)];
+                    el.innerHTML = `
+                        <span>📶 ${bars}</span>
+                        <span>📡 ${d.operator}</span>
+                        <span>🌐 ${d.network}</span>
+                    `;
+                } else {
+                    el.innerHTML = '<span class="rs-error">⚠️ Routeur inaccessible</span>';
+                }
+            } catch(e) {
+                el.innerHTML = '<span class="rs-error">⚠️ Erreur statut</span>';
+            }
+        }
+
+        // Chargement au démarrage + refresh toutes les 30s
+        loadRouterStatus();
+        setInterval(loadRouterStatus, 30000);
+
+        // --- PAGINATION ---
+        function renderPagination(paginationId, currentPage, hasMore, loadFn) {
+            const el = document.getElementById(paginationId);
+            if (currentPage === 1 && !hasMore) { el.innerHTML = ''; return; }
+            el.innerHTML = '';
+            const prev = document.createElement('button');
+            prev.textContent = '◀ Préc'; prev.disabled = currentPage <= 1;
+            prev.onclick = () => loadFn(currentPage - 1);
+            const label = document.createElement('span');
+            label.textContent = `Page ${currentPage}`;
+            const next = document.createElement('button');
+            next.textContent = 'Suiv ▶'; next.disabled = !hasMore;
+            next.onclick = () => loadFn(currentPage + 1);
+            el.append(prev, label, next);
+        }
+
+        // --- FILTRE ---
+        function filterMessages(contentId, searchId) {
+            const q = document.getElementById(searchId).value.toLowerCase();
+            document.querySelectorAll(`#${contentId} tbody tr`).forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
+        }
+
+        // --- NOTIFICATIONS ---
+        function updateNotifButton(perm) {
+            const btn = document.getElementById('btn-notif');
+            if (perm === 'granted') {
+                btn.textContent = '🔔'; btn.title = 'Notifications activées';
+                btn.style.borderColor = 'var(--primary)';
+            } else if (perm === 'denied') {
+                btn.textContent = '🔕'; btn.title = 'Notifications bloquées (à autoriser dans le navigateur)';
+                btn.style.borderColor = '';
+            } else {
+                btn.textContent = '🔕'; btn.title = 'Activer les notifications SMS';
+                btn.style.borderColor = '';
+            }
+        }
+
+        async function checkNewInboxMessages() {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+            try {
+                const res = await fetch('/inbox');
+                const data = await res.json();
+                if (data.status !== 'success') return;
+                const indices = new Set(data.messages.map(m => m.Index));
+                if (notifKnownIndices === null) { notifKnownIndices = indices; return; }
+                const newMsgs = data.messages.filter(m => !notifKnownIndices.has(m.Index));
+                if (newMsgs.length > 0) {
+                    newMsgs.forEach(m => new Notification('📩 Nouveau SMS', {
+                        body: `De : ${m.Phone || '?'}\n${(m.Content || '').substring(0, 120)}`,
+                        icon: '/static/favicon.svg'
+                    }));
+                    notifKnownIndices = indices;
+                    unreadCount += newMsgs.length;
+                    updateTabBadge();
+                    if (currentMode === 'inbox') loadInbox(inboxPage);
+                }
+            } catch(e) {}
+        }
+
+        async function requestNotifPermission() {
+            if (!('Notification' in window)) return alert("Notifications non supportées par ce navigateur.");
+            const perm = await Notification.requestPermission();
+            updateNotifButton(perm);
+            if (perm === 'granted') { checkNewInboxMessages(); setInterval(checkNewInboxMessages, 60000); }
+        }
+
+        // --- GROUPES DE DESTINATAIRES ---
+        const GROUPS_KEY = 'sms_groups';
+
+        function getGroups() {
+            try { return JSON.parse(localStorage.getItem(GROUPS_KEY) || '{}'); } catch(e) { return {}; }
+        }
+        function persistGroups(g) { localStorage.setItem(GROUPS_KEY, JSON.stringify(g)); }
+
+        function refreshGroupSelects() {
+            const groups = getGroups();
+            const names = Object.keys(groups).sort();
+            ['simple', 'custom'].forEach(mode => {
+                const sel = document.getElementById(`group-select-${mode}`);
+                if (!sel) return;
+                const prev = sel.value;
+                sel.innerHTML = '<option value="">— Aucun groupe —</option>';
+                names.forEach(name => {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = `${name} (${groups[name].length})`;
+                    sel.appendChild(opt);
+                });
+                if (prev && groups[prev]) sel.value = prev;
+            });
+        }
+
+        function useGroup(mode) {
+            const name = document.getElementById(`group-select-${mode}`).value;
+            if (!name) return;
+            const numbers = getGroups()[name];
+            if (!numbers) return;
+            loadedGroup[mode] = numbers;
+            const el = document.getElementById(`group-status-${mode}`);
+            el.style.color = 'var(--primary)';
+            el.textContent = `✔ "${name}" chargé — ${numbers.length} numéro(s)`;
+        }
+
+        function deleteGroup(mode) {
+            const name = document.getElementById(`group-select-${mode}`).value;
+            if (!name || !confirm(`Supprimer le groupe "${name}" ?`)) return;
+            const groups = getGroups();
+            delete groups[name];
+            persistGroups(groups);
+            loadedGroup[mode] = null;
+            document.getElementById(`group-status-${mode}`).textContent = '';
+            refreshGroupSelects();
+        }
+
+        function toggleNewGroupPanel(mode) {
+            const panel = document.getElementById(`new-group-panel-${mode}`);
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) document.getElementById(`group-name-${mode}`).focus();
+        }
+
+        function createGroup(mode) {
+            const name    = document.getElementById(`group-name-${mode}`).value.trim();
+            const raw     = document.getElementById(`group-numbers-${mode}`).value;
+            if (!name) return alert('Donnez un nom au groupe.');
+            const numbers = raw.split('\n').map(l => l.trim()).filter(l => l);
+            if (!numbers.length) return alert('Aucun numéro saisi.');
+            const groups = getGroups();
+            groups[name] = numbers;
+            persistGroups(groups);
+            refreshGroupSelects();
+            document.getElementById(`group-name-${mode}`).value = '';
+            document.getElementById(`group-numbers-${mode}`).value = '';
+            toggleNewGroupPanel(mode);
+            ['simple', 'custom'].forEach(m => {
+                const sel = document.getElementById(`group-select-${m}`);
+                if (sel) sel.value = name;
+            });
+            useGroup(mode);
+        }
+
+        refreshGroupSelects();
+
+        // Init notifications si déjà accordées
+        if ('Notification' in window) {
+            updateNotifButton(Notification.permission);
+            if (Notification.permission === 'granted') {
+                checkNewInboxMessages();
+                setInterval(checkNewInboxMessages, 60000);
+            }
+        }
+
+        // Échappement XSS
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>'"]/g, function(tag) {
+                const chars = { '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' };
+                return chars[tag] || tag;
+            });
+        }
+
+        // --- INBOX LOGIC ---
+        async function loadInbox(page = 1) {
+            inboxPage = page;
+            unreadCount = 0;
+            updateTabBadge();
+            const container = document.getElementById('inbox-content');
+            container.innerHTML = '<div style="text-align:center; padding:20px;">Chargement...</div>';
+            document.getElementById('inbox-search').value = '';
+
+            try {
+                const res = await fetch(`/inbox?page=${page}`);
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    if (data.messages.length === 0 && page === 1) {
+                        container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Boîte de réception vide 📭</div>';
+                        document.getElementById('inbox-pagination').innerHTML = '';
+                        return;
+                    }
+                    if (data.messages.length === 0) { loadInbox(page - 1); return; }
+
+                    let html = '<table class="inbox-table"><thead><tr><th>Message</th><th width="30"></th></tr></thead><tbody>';
+                    data.messages.forEach(sms => {
+                        html += `
+                            <tr>
+                                <td>
+                                    <span class="sender-num">${escapeHTML(sms.Phone)}</span>
+                                    <span class="msg-date">${escapeHTML(sms.Date)}</span>
+                                    <div>${escapeHTML(sms.Content)}</div>
+                                </td>
+                                <td style="text-align:center;white-space:nowrap;">
+                                    <button class="btn-reply" data-phone="${escapeHTML(String(sms.Phone || ''))}" title="Répondre">↩️</button>
+                                    <button class="btn-delete" data-index="${escapeHTML(String(sms.Index))}" data-box="inbox" title="Supprimer">🗑️</button>
+                                </td>
+                            </tr>`;
+                    });
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                    renderPagination('inbox-pagination', page, data.has_more, loadInbox);
+                } else {
+                    container.innerHTML = '<div style="color:red; text-align:center;">Erreur: ' + escapeHTML(data.message) + '</div>';
+                }
+            } catch (e) {
+                container.innerHTML = '<div style="color:red; text-align:center;">Erreur réseau lors du chargement.</div>';
+            }
+        }
+
+        async function deleteSms(index, onSuccess) {
+            if(!confirm("Voulez-vous vraiment supprimer ce SMS ?")) return;
+            try {
+                const res = await fetch('/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
+                    body: JSON.stringify({ index: index })
+                });
+                const data = await res.json();
+                if(data.status === 'success') { onSuccess(); }
+                else { alert("Erreur suppression: " + data.message); }
+            } catch(e) { alert("Erreur réseau"); }
+        }
+
+        // Délégation d'événement — supprimer et répondre
+        document.addEventListener('click', function(e) {
+            const delBtn = e.target.closest('.btn-delete[data-index]');
+            if (delBtn) {
+                delBtn.dataset.box === 'inbox'
+                    ? deleteSms(delBtn.dataset.index, () => loadInbox(inboxPage))
+                    : deleteSms(delBtn.dataset.index, () => loadOutbox(outboxPage));
+                return;
+            }
+            const replyBtn = e.target.closest('.btn-reply[data-phone]');
+            if (replyBtn) {
+                setMode('simple', document.getElementById('tab-simple'));
+                document.getElementById('simple-num').value = replyBtn.dataset.phone;
+                document.getElementById('simple-msg').focus();
+            }
+        });
+
+        // --- OUTBOX LOGIC ---
+        async function loadOutbox(page = 1) {
+            outboxPage = page;
+            const container = document.getElementById('outbox-content');
+            container.innerHTML = '<div style="text-align:center; padding:20px;">Chargement...</div>';
+            document.getElementById('outbox-search').value = '';
+
+            try {
+                const res = await fetch(`/outbox?page=${page}`);
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    if (data.messages.length === 0 && page === 1) {
+                        container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Boîte d&apos;envoi vide 📤</div>';
+                        document.getElementById('outbox-pagination').innerHTML = '';
+                        return;
+                    }
+                    if (data.messages.length === 0) { loadOutbox(page - 1); return; }
+
+                    let html = '<table class="inbox-table"><thead><tr><th>Message</th><th width="30"></th></tr></thead><tbody>';
+                    data.messages.forEach(sms => {
+                        html += `
+                            <tr>
+                                <td>
+                                    <span class="sender-num">${escapeHTML(sms.Phone)}</span>
+                                    <span class="msg-date">${escapeHTML(sms.Date)}</span>
+                                    <div>${escapeHTML(sms.Content)}</div>
+                                </td>
+                                <td style="text-align:center;">
+                                    <button class="btn-delete" data-index="${escapeHTML(String(sms.Index))}" data-box="outbox" title="Supprimer">🗑️</button>
+                                </td>
+                            </tr>`;
+                    });
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                    renderPagination('outbox-pagination', page, data.has_more, loadOutbox);
+                } else {
+                    container.innerHTML = '<div style="color:red; text-align:center;">Erreur: ' + escapeHTML(data.message) + '</div>';
+                }
+            } catch (e) {
+                container.innerHTML = '<div style="color:red; text-align:center;">Erreur réseau lors du chargement.</div>';
+            }
+        }
+
+        async function deleteAllSent() {
+            if(!confirm("⚠️ Voulez-vous vraiment supprimer TOUS les messages envoyés ? Cette action est irréversible.")) return;
+
+            const container = document.getElementById('outbox-content');
+            container.innerHTML = '<div style="text-align:center; padding:20px;">Démarrage de la suppression en arrière-plan...</div>';
+
+            try {
+                const res = await fetch('/delete_all_sent', { method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN} });
+                const data = await res.json();
+
+                if (res.status === 202 || data.status === 'success') {
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const statusRes = await fetch('/delete_all_sent/status');
+                            const statusData = await statusRes.json();
+                            if (statusData.status === 'success') {
+                                if (statusData.in_progress) {
+                                    container.innerHTML = `<div style="text-align:center; padding:20px;">Suppression en cours...<br>SMS supprimés : <strong>${statusData.deleted_count}</strong></div>`;
+                                } else {
+                                    clearInterval(pollInterval);
+                                    if (statusData.error) alert("Erreur : " + statusData.error);
+                                    loadOutbox();
+                                }
+                            } else {
+                                clearInterval(pollInterval);
+                                alert("Erreur lors du suivi.");
+                                loadOutbox();
+                            }
+                        } catch (e) {
+                            clearInterval(pollInterval);
+                            alert("Erreur réseau lors du suivi.");
+                            loadOutbox();
+                        }
+                    }, 1000);
+                } else {
+                    alert("Erreur lors du démarrage : " + data.message);
+                    loadOutbox();
+                }
+            } catch(e) { alert("Erreur réseau"); loadOutbox(); }
+        }
+
+        // PREVISUALISATION FICHIER
+        function previewFile(inputId, previewId) {
+            const file = document.getElementById(inputId).files[0];
+            const previewBox = document.getElementById(previewId);
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const all = e.target.result.split('\n').filter(l => l.trim());
+                    const preview = all.slice(0, 5);
+                    previewBox.style.display = 'block';
+                    previewBox.innerText = `--- APERÇU (${all.length} numéro${all.length > 1 ? 's' : ''}) ---\n` + preview.join('\n') + (all.length > 5 ? `\n… +${all.length - 5} de plus` : '');
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        async function stopSend() {
+            document.getElementById('btn-stop').disabled = true;
+            try { await fetch('/send_bulk/stop', { method: 'POST', headers: {'X-CSRF-Token': CSRF_TOKEN} }); } catch(e) {}
+            document.getElementById('btn-stop').disabled = false;
+        }
+
+        // LOGIQUE D'ENVOI (SEND)
+        async function processSend() {
+            let tasks = [];
+
+            if (currentMode === 'simple') {
+                const rawNum = document.getElementById('simple-num').value;
+                const msg = document.getElementById('simple-msg').value;
+                const repeat = parseInt(document.getElementById('simple-repeat').value);
+                if(!rawNum || !msg) return alert("Remplissez les numéros et le message !");
+                const nums = rawNum.split(';').map(n => n.trim()).filter(n => n.length > 0);
+                if(nums.length === 0) return alert("Aucun numéro valide trouvé !");
+                for(let r = 0; r < repeat; r++) nums.forEach(n => tasks.push({ number: n, message: msg }));
+            }
+            else if (currentMode === 'bulk_simple') {
+                const commonMsg = document.getElementById('msg-simple').value;
+                if(!commonMsg) return alert("Message manquant !");
+                const fileInput = document.getElementById('file-simple');
+                if(!fileInput.files.length) return alert("Chargez un fichier .txt !");
+                const text = await fileInput.files[0].text();
+                text.split('\n').forEach(line => { const num = line.trim(); if(num) tasks.push({ number: num, message: commonMsg }); });
+            }
+            else if (currentMode === 'bulk_custom') {
+                const fallbackMsg = document.getElementById('msg-custom').value;
+                if (loadedGroup.custom) {
+                    if(!fallbackMsg) return alert("Message de secours manquant !");
+                    loadedGroup.custom.forEach(num => { if(num) tasks.push({ number: num, message: fallbackMsg }); });
+                } else {
+                    const fileInput = document.getElementById('file-custom');
+                    if(!fileInput.files.length) return alert("Chargez un fichier ou sélectionnez un groupe !");
+                    const text = await fileInput.files[0].text();
+                    text.split('\n').forEach(line => {
+                        line = line.trim();
+                        if(!line) return;
+                        let targetNum = "", targetMsg = "";
+                        if(line.includes(';')) {
+                            const parts = line.split(';');
+                            targetNum = parts[0].trim();
+                            targetMsg = parts.slice(1).join(';').trim();
+                        } else { targetNum = line; targetMsg = fallbackMsg; }
+                        if(targetNum && targetMsg) tasks.push({ number: targetNum, message: targetMsg });
+                    });
+                }
+                if(tasks.length === 0) return alert("Aucun destinataire valide.");
+            }
+
+            const btn = document.querySelector(`#view-${currentMode} .btn-send`);
+            const progArea = document.getElementById('progress-area');
+            const progFill = document.getElementById('prog-fill');
+            const statusText = document.getElementById('status-text');
+            const ticker = document.getElementById('progress-ticker');
+
+            if(btn) btn.disabled = true;
+            progArea.style.display = 'block';
+            progArea.style.opacity = '1';
+            ticker.textContent = '';
+            ticker.className = 'progress-ticker';
+            progFill.style.width = '0%';
+            statusText.innerText = 'Démarrage...';
+            isSending = true;
+            document.getElementById('btn-stop').classList.remove('hidden');
+
+            const delay = currentMode === 'bulk_simple' ? parseFloat(document.getElementById('delay-bulk-simple').value)
+                        : currentMode === 'bulk_custom' ? parseFloat(document.getElementById('delay-bulk-custom').value)
+                        : 1.0;
+
+            let total = tasks.length;
+            try {
+                const res = await fetch('/send_bulk', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
+                    body: JSON.stringify({ tasks, delay })
+                });
+                const data = await res.json();
+                if (res.status !== 202) {
+                    isSending = false;
+                    document.getElementById('btn-stop').classList.add('hidden');
+                    statusText.innerText = 'Erreur : ' + escapeHTML(data.message);
+                    if(btn) btn.disabled = false;
+                    return;
+                }
+                total = data.total ?? total;
+            } catch(e) {
+                isSending = false;
+                document.getElementById('btn-stop').classList.add('hidden');
+                statusText.innerText = 'Erreur réseau au démarrage.';
+                if(btn) btn.disabled = false;
+                return;
+            }
+
+            function finalizeSend(sent, errors) {
+                isSending = false;
+                document.getElementById('btn-stop').classList.add('hidden');
+                progFill.style.width = '100%';
+                statusText.innerText = `Terminé ! ✅ Succès: ${sent} | ❌ Échecs: ${errors}`;
+                if(btn) btn.disabled = false;
+                setTimeout(() => {
+                    progArea.style.opacity = '0';
+                    setTimeout(() => {
+                        progArea.style.display = 'none';
+                        progArea.style.opacity = '';
+                        ticker.textContent = '';
+                        ticker.className = 'progress-ticker';
+                    }, 600);
+                }, 3000);
+            }
+
+            let sseCount = 0;
+            const es = new EventSource('/send_bulk/stream');
+            es.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+                if (d.done) { es.close(); finalizeSend(d.sent, d.errors); return; }
+                sseCount++;
+                progFill.style.width = (total > 0 ? sseCount / total * 100 : 0) + '%';
+                statusText.innerText = `Envoi ${sseCount}/${total}...`;
+                ticker.textContent = d.status === 'ok'
+                    ? `✔ ${d.number} : OK`
+                    : `✖ ${d.number} : ${d.detail || 'Erreur'}`;
+                ticker.className = 'progress-ticker ' + (d.status === 'ok' ? 'log-ok' : 'log-err');
+            };
+            es.onerror = () => {
+                es.close();
+                isSending = false;
+                document.getElementById('btn-stop').classList.add('hidden');
+                statusText.innerText = 'Connexion SSE interrompue.';
+                if(btn) btn.disabled = false;
+            };
+        }
+    </script>
+</body>
+</html>

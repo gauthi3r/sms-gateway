@@ -1,0 +1,19 @@
+[Unit]
+Description=Interface Web SMS Gateway Huawei
+# On attend que le réseau soit prêt avant de démarrer
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+
+WorkingDirectory=/var/www/sms-gateway
+
+ExecStart=/var/www/sms-gateway/venv/bin/python gateway-sms-webui.py
+
+# Redémarrage automatique si le script plante
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -2,6 +2,8 @@
 
 Interface web Flask pour envoyer et recevoir des SMS via un routeur **Huawei LTE** (testé sur B525s-23a). Rate limiting, logging sécurisé (mot de passe masqué), validation des numéros FR.
 
+![SMS Gateway](docs/sms-gateway-screen.png)
+
 ---
 
 ## Prérequis

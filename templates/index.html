@@ -138,6 +138,26 @@
         .progress-ticker { margin-top: 6px; text-align: center; font-size: 0.82rem; min-height: 1.2em; }
         .log-ok { color: #28a745; } .log-err { color: #dc3545; }
 
+        /* CONFIG PAGE */
+        .config-section { margin-bottom: 1.4rem; }
+        .config-section h3 { font-size: 0.9rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.8rem; }
+        .brand-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 1rem; }
+        .brand-card { border: 2px solid var(--input-border); border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: border-color 0.2s, background 0.2s; font-size: 0.85rem; background: var(--input-bg); color: var(--input-text); text-align: left; }
+        .brand-card:hover { border-color: var(--primary); }
+        .brand-card.selected { border-color: var(--primary); background: rgba(0,123,255,0.08); }
+        .brand-card .brand-name { font-weight: 700; display: block; margin-bottom: 2px; }
+        .brand-card .brand-note { font-size: 0.75rem; color: var(--text-muted); }
+        .config-status { margin-top: 1rem; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; display: none; }
+        .config-status.ok  { background: rgba(40,167,69,0.12); color: #28a745; border: 1px solid rgba(40,167,69,0.3); }
+        .config-status.err { background: rgba(220,53,69,0.12); color: var(--danger); border: 1px solid rgba(220,53,69,0.3); }
+        .config-actions { display: flex; gap: 10px; margin-top: 1rem; }
+        .config-actions button { flex: 1; padding: 11px; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.2s; border: none; }
+        .btn-test { background: var(--input-bg); border: 1px solid var(--input-border) !important; color: var(--text-main); }
+        .btn-test:hover { background: var(--input-border); }
+        .btn-save { background: var(--primary); color: white; }
+        .btn-save:hover { background: var(--primary-hover); }
+        .no-outbox-msg { text-align: center; padding: 30px 20px; color: var(--text-muted); font-size: 0.9rem; }
+
         .hidden { display: none; }
 
         /* ── RESPONSIVE ──────────────────────────────────────── */
@@ -180,8 +200,9 @@
             <div class="tab active" id="tab-simple" onclick="setMode('simple', this)">✉️ Simple</div>
             <div class="tab" onclick="setMode('bulk_simple', this)">📂 File</div>
             <div class="tab" onclick="setMode('bulk_custom', this)">🛠️ Expert</div>
-            <div class="tab" onclick="setMode('inbox', this); loadInbox(1);">📥 Inbox</div>
-            <div class="tab" onclick="setMode('outbox', this); loadOutbox(1);">📤 Outbox</div>
+            <div class="tab" id="tab-inbox" onclick="setMode('inbox', this); loadInbox(1);">📥 Inbox</div>
+            <div class="tab" id="tab-outbox" onclick="setMode('outbox', this); loadOutbox(1);">📤 Outbox</div>
+            <div class="tab" onclick="setMode('config', this); loadConfigPage();">⚙️ Config</div>
         </div>
 
         <div id="view-simple" class="view">
@@ -306,6 +327,38 @@
             <div class="pagination" id="outbox-pagination"></div>
         </div>
 
+        <!-- CONFIG VIEW -->
+        <div id="view-config" class="view hidden">
+            <div class="config-section">
+                <h3>Marque du routeur</h3>
+                <div class="brand-grid" id="brand-grid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h3>Connexion</h3>
+                <div class="form-group">
+                    <label>Adresse IP du routeur</label>
+                    <input type="text" id="cfg-ip" placeholder="192.168.1.1" autocomplete="off">
+                </div>
+                <div class="form-group" id="cfg-user-group">
+                    <label>Utilisateur</label>
+                    <input type="text" id="cfg-user" placeholder="admin" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Mot de passe</label>
+                    <input type="password" id="cfg-pass" placeholder="••••••••" autocomplete="new-password">
+                </div>
+            </div>
+
+            <div class="config-actions">
+                <button class="btn-test" onclick="testConfig()">🔌 Tester</button>
+                <button class="btn-save" onclick="saveConfig()">💾 Sauvegarder</button>
+            </div>
+            <div class="config-status" id="config-status"></div>
+        </div>
+
         <div id="progress-area">
             <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
             <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-top:8px;">
@@ -327,6 +380,145 @@
         let notifKnownIndices = null;
         let unreadCount = 0;
         const loadedGroup = { simple: null, custom: null };
+
+        // Router capabilities (fetched on load)
+        let routerCaps = { supports_inbox: true, supports_outbox: true };
+        let allAdapters = {};
+        let selectedBrand = 'huawei';
+
+        async function fetchCapabilities() {
+            try {
+                const res  = await fetch('/capabilities');
+                const data = await res.json();
+                routerCaps = data;
+                applyCapabilities();
+            } catch(e) {}
+        }
+
+        function applyCapabilities() {
+            const outboxTab = document.getElementById('tab-outbox');
+            if (!routerCaps.supports_outbox) {
+                outboxTab.style.opacity = '0.4';
+                outboxTab.title = 'Non supporté par ce routeur';
+            } else {
+                outboxTab.style.opacity = '';
+                outboxTab.title = '';
+            }
+        }
+
+        fetchCapabilities();
+
+        // ── CONFIG PAGE ──────────────────────────────────────────────────────
+
+        async function loadConfigPage() {
+            try {
+                const res  = await fetch('/config');
+                const data = await res.json();
+                allAdapters  = data.adapters || {};
+                selectedBrand = data.config?.brand || 'huawei';
+
+                // Build brand grid
+                const grid = document.getElementById('brand-grid');
+                grid.innerHTML = '';
+                for (const [slug, meta] of Object.entries(allAdapters)) {
+                    const card = document.createElement('button');
+                    card.className = 'brand-card' + (slug === selectedBrand ? ' selected' : '');
+                    card.dataset.brand = slug;
+                    card.innerHTML = `
+                        <span class="brand-name">${escapeHTML(slug.charAt(0).toUpperCase() + slug.slice(1))}</span>
+                        <span class="brand-note">${escapeHTML(meta.label || '')}</span>
+                        ${!meta.supports_outbox ? '<span class="brand-note" style="color:var(--danger)">⚠️ Pas de boîte d\'envoi</span>' : ''}
+                    `;
+                    card.addEventListener('click', () => selectBrand(slug));
+                    grid.appendChild(card);
+                }
+
+                // Fill fields
+                document.getElementById('cfg-ip').value   = data.config?.ip   || '';
+                document.getElementById('cfg-user').value = data.config?.user  || '';
+                document.getElementById('cfg-pass').value = data.config?.pass  || '';
+
+                updateUserFieldVisibility(selectedBrand);
+                hideConfigStatus();
+            } catch(e) {
+                showConfigStatus('err', 'Impossible de charger la configuration.');
+            }
+        }
+
+        function selectBrand(slug) {
+            selectedBrand = slug;
+            document.querySelectorAll('.brand-card').forEach(c => {
+                c.classList.toggle('selected', c.dataset.brand === slug);
+            });
+            updateUserFieldVisibility(slug);
+        }
+
+        function updateUserFieldVisibility(slug) {
+            const meta = allAdapters[slug] || {};
+            document.getElementById('cfg-user-group').style.display =
+                meta.needs_user === false ? 'none' : '';
+        }
+
+        async function testConfig() {
+            showConfigStatus('', '⏳ Test en cours…');
+            const payload = {
+                brand: selectedBrand,
+                ip:    document.getElementById('cfg-ip').value.trim(),
+                user:  document.getElementById('cfg-user').value.trim(),
+                pass:  document.getElementById('cfg-pass').value,
+            };
+            try {
+                const res  = await fetch('/config/test', {
+                    method:  'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
+                    body:    JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showConfigStatus('ok', `✅ ${escapeHTML(data.message)}`);
+                } else {
+                    showConfigStatus('err', `❌ ${escapeHTML(data.message)}`);
+                }
+            } catch(e) {
+                showConfigStatus('err', '❌ Erreur réseau.');
+            }
+        }
+
+        async function saveConfig() {
+            const payload = {
+                brand: selectedBrand,
+                ip:    document.getElementById('cfg-ip').value.trim(),
+                user:  document.getElementById('cfg-user').value.trim(),
+                pass:  document.getElementById('cfg-pass').value,
+            };
+            if (!payload.ip) return showConfigStatus('err', '❌ L\'adresse IP est obligatoire.');
+            try {
+                const res  = await fetch('/config', {
+                    method:  'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN},
+                    body:    JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showConfigStatus('ok', `✅ ${escapeHTML(data.message)}`);
+                    fetchCapabilities();  // Refresh outbox tab state
+                } else {
+                    showConfigStatus('err', `❌ ${escapeHTML(data.message)}`);
+                }
+            } catch(e) {
+                showConfigStatus('err', '❌ Erreur réseau.');
+            }
+        }
+
+        function showConfigStatus(type, msg) {
+            const el = document.getElementById('config-status');
+            el.style.display = 'block';
+            el.className = 'config-status' + (type ? ' ' + type : '');
+            el.textContent = msg;
+        }
+        function hideConfigStatus() {
+            document.getElementById('config-status').style.display = 'none';
+        }
 
         function updateTabBadge() {
             document.title = unreadCount > 0 ? `(${unreadCount}) SMS Hub` : 'SMS Hub';
@@ -665,6 +857,11 @@
                 const res = await fetch(`/outbox?page=${page}`);
                 const data = await res.json();
 
+                if (data.not_supported) {
+                    container.innerHTML = '<div class="no-outbox-msg">📭 Ce routeur n\'expose pas la boîte d\'envoi via son API.</div>';
+                    document.getElementById('outbox-pagination').innerHTML = '';
+                    return;
+                }
                 if (data.status === 'success') {
                     if (data.messages.length === 0 && page === 1) {
                         container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">Boîte d&apos;envoi vide 📤</div>';

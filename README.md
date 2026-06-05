@@ -1,6 +1,6 @@
 # 📡 SMS Gateway — Guide d'installation
 
-Interface web Flask pour envoyer et recevoir des SMS via un routeur **Huawei LTE** (testé sur B525s-23a). Rate limiting, logging sécurisé (mot de passe masqué), validation des numéros FR.
+Interface web Flask pour envoyer et recevoir des SMS via un routeur **4G/5G** (Huawei, Netgear…). Rate limiting, logging sécurisé (mot de passe masqué), validation des numéros FR.
 
 ## 🖼️ Aperçu
 
@@ -11,6 +11,30 @@ Interface web Flask pour envoyer et recevoir des SMS via un routeur **Huawei LTE
 | Boîte de réception | Boîte d'envoi |
 |--------------------|---------------|
 | ![Inbox](docs/inbox.png) | ![Outbox](docs/outbox.png) |
+
+| Configuration routeur |
+|-----------------------|
+| ![Config](docs/config.png) |
+
+---
+
+## 🔌 Configuration multi-routeurs
+
+L'onglet **⚙️ Config** permet de connecter n'importe quel routeur 4G/5G supporté, directement depuis l'interface web — sans toucher aux fichiers de configuration.
+
+| Marque | Bibliothèque | Inbox | Outbox |
+|--------|-------------|-------|--------|
+| Huawei (B525, B535, B818…) | `huawei-lte-api` | ✅ | ✅ |
+| Netgear (LB1120, LB2120, MR1100…) | `eternalegypt` | ✅ | ❌ |
+
+**Champs de connexion :**
+- **Adresse IP** du routeur sur le réseau local
+- **Utilisateur** (non requis pour Netgear)
+- **Mot de passe**
+
+Le bouton **Tester** vérifie la connexion sans sauvegarder. Le bouton **Sauvegarder** applique la configuration immédiatement, sans redémarrage du service.
+
+> La configuration est stockée dans `router_config.json` (non versionné). Le mot de passe n'apparaît jamais dans les logs.
 
 ---
 

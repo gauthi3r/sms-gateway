@@ -34,7 +34,14 @@ class GlinetAdapter(RouterAdapter):
         self._username = user or 'root'
         self._url = f'https://{ip}/rpc'
         self._bus = bus          # None → auto-discovered on first use
+        # Cache dir may contain serialised credentials — keep it private to
+        # the running user. Chmod every time to repair perms if something
+        # else loosened them.
         os.makedirs(_CACHE_DIR, exist_ok=True)
+        try:
+            os.chmod(_CACHE_DIR, 0o700)
+        except OSError as e:
+            log.warning("Impossible de durcir les permissions du cache GL.iNet : %s", e)
 
     # ── Private helpers ──────────────────────────────────────────────────────
 

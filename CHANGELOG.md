@@ -2,6 +2,20 @@
 
 ---
 
+## [1.00.30] — 2026-06-06
+### Sécurité & robustesse (audit code review)
+- **`load_config`** robustifié : JSON corrompu ou racine non-dict → fallback config vide + log d'erreur (le service ne crashe plus au démarrage)
+- **`reload_adapter`** : swap atomique de `_config` / `_adapter` sous `threading.Lock` — fini les états torn (nouvelle config, ancien adapter) en cas de requête concurrente
+- **`current_adapter()`** : snapshot sous lock pour ne jamais retourner un adapter en cours de remplacement
+- **`/router/status`** : cache thread-safe (lock séparé, appel routeur hors du lock pour ne pas sérialiser tous les callers)
+- **Validation marque** dans `POST /config` et `/config/test` : `brand in ADAPTERS` vérifié upfront → erreur 400 propre au lieu d'une exception générique
+- **TPLink** : distinction erreur réseau vs erreur d'auth — un routeur injoignable ne déclenche plus le fallback GCM (qui échouerait de toute façon)
+- **GL.iNet** : `/tmp/glinet_cache` durci à `chmod 700` à chaque instanciation
+- Suppression de `.env` et `.env.example` (morts depuis la bascule vers `router_config.json`)
+- `fix-perms.sh` : ligne `chmod 640 .env` retirée
+
+---
+
 ## [1.00.29] — 2026-06-06
 ### Nouveautés
 - Adapteur **ZTE MC/MF** (MC801a, MC889, MF286, MF289…) via API goform HTTP native

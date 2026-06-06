@@ -12,7 +12,7 @@ import threading
 import time
 import logging
 
-from adapters import get_adapter, ADAPTER_META, NotSupportedError
+from adapters import get_adapter, ADAPTER_META, ADAPTERS, NotSupportedError
 
 # ---------------------------------------------------------------------------
 # CONFIG — router_config.json est la seule source de vérité.
@@ -24,30 +24,59 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'router_config.json')
 _CONFIG_EMPTY = {'brand': '', 'ip': '', 'user': '', 'pass': ''}
 
 def load_config() -> dict:
-    """Load router config from router_config.json, or return empty config."""
-    if os.path.exists(CONFIG_PATH):
+    """Load router config from router_config.json, or return empty config.
+
+    Falls back to an empty config (with a clear log) if the file is corrupted
+    or unreadable, so the service can still start and let the user fix things
+    via the ⚙️ Config UI.
+    """
+    if not os.path.exists(CONFIG_PATH):
+        return dict(_CONFIG_EMPTY)
+    try:
         with open(CONFIG_PATH) as f:
-            return json.load(f)
-    return dict(_CONFIG_EMPTY)
+            cfg = json.load(f)
+        if not isinstance(cfg, dict):
+            raise ValueError(f"router_config.json racine doit être un dict, pas {type(cfg).__name__}")
+        # Ensure all required keys exist (avoid KeyError later)
+        return {**_CONFIG_EMPTY, **cfg}
+    except (json.JSONDecodeError, OSError, ValueError) as e:
+        # Don't crash on boot — let the UI repair the config
+        logging.getLogger(__name__).error(
+            "router_config.json illisible (%s) — démarrage avec config vide", e
+        )
+        return dict(_CONFIG_EMPTY)
 
 def save_config(cfg: dict) -> None:
     with open(CONFIG_PATH, 'w') as f:
         json.dump(cfg, f, indent=2)
 
-# Module-level adapter (None si pas encore configuré)
+# Module-level adapter (None si pas encore configuré).
+# _adapter_lock protège les réassignations concurrentes de _config / _adapter.
+_adapter_lock = threading.Lock()
 _config  = load_config()
 _adapter = get_adapter(_config) if _config.get('pass') else None
 
 def current_adapter():
-    if _adapter is None:
+    # Snapshot under the lock so we never return an adapter that is mid-swap.
+    with _adapter_lock:
+        adapter = _adapter
+    if adapter is None:
         from flask import abort
         abort(503, description="Routeur non configuré. Rendez-vous dans l'onglet ⚙️ Config.")
-    return _adapter
+    return adapter
 
 def reload_adapter(cfg: dict):
+    """Swap config and adapter atomically.
+
+    Builds the new adapter outside the lock (may raise ValueError on unknown
+    brand), then publishes both _config and _adapter under the lock so a
+    concurrent request never sees a torn (new-config, old-adapter) state.
+    """
+    new_adapter = get_adapter(cfg) if cfg.get('pass') else None
     global _adapter, _config
-    _config  = cfg
-    _adapter = get_adapter(cfg) if cfg.get('pass') else None
+    with _adapter_lock:
+        _config  = cfg
+        _adapter = new_adapter
 
 # ---------------------------------------------------------------------------
 # LOGGING — sanitise le mot de passe de tout log/traceback
@@ -119,9 +148,11 @@ delete_state = BulkDeleteState()
 send_state   = BulkSendState()
 
 # ---------------------------------------------------------------------------
-# CACHE STATUT ROUTEUR
+# CACHE STATUT ROUTEUR (thread-safe — plusieurs requêtes /router/status
+# peuvent arriver concurrent depuis l'UI et les widgets de monitoring)
 # ---------------------------------------------------------------------------
 _router_status_cache: dict = {'data': None, 'ts': 0.0}
+_router_status_lock = threading.Lock()
 ROUTER_STATUS_TTL = 5  # secondes
 
 # ---------------------------------------------------------------------------
@@ -184,6 +215,9 @@ def set_config():
     if not brand or not ip:
         return jsonify({'status': 'error', 'message': 'Marque et IP sont obligatoires'}), 400
 
+    if brand not in ADAPTERS:
+        return jsonify({'status': 'error', 'message': f'Marque inconnue : "{brand}". Valeurs acceptées : {", ".join(ADAPTERS)}.'}), 400
+
     if not validate_router_ip(ip):
         return jsonify({'status': 'error', 'message': f'IP invalide : "{ip}". Seules les adresses IPv4 privées sont acceptées (ex: 192.168.x.x).'}), 400
 
@@ -199,7 +233,9 @@ def set_config():
 
     save_config(new_cfg)
     # Invalidate router status cache
-    _router_status_cache['data'] = None
+    with _router_status_lock:
+        _router_status_cache['data'] = None
+        _router_status_cache['ts'] = 0.0
     logger.info("CONFIG mis à jour — marque=%s ip=%s", brand, ip)
     return jsonify({'status': 'ok', 'message': 'Configuration sauvegardée.'}), 200
 
@@ -215,6 +251,9 @@ def test_config():
     password = data.get('pass', '')
     if password == '********' or not password:
         password = _config.get('pass', '')
+
+    if brand not in ADAPTERS:
+        return jsonify({'status': 'error', 'message': f'Marque inconnue : "{brand}". Valeurs acceptées : {", ".join(ADAPTERS)}.'}), 400
 
     if not validate_router_ip(ip):
         return jsonify({'status': 'error', 'message': f'IP invalide : "{ip}". Seules les adresses IPv4 privées sont acceptées.'}), 400
@@ -497,12 +536,18 @@ def health():
 @app.route('/router/status', methods=['GET'])
 def router_status():
     now = time.time()
-    if _router_status_cache['data'] and now - _router_status_cache['ts'] < ROUTER_STATUS_TTL:
-        return jsonify(_router_status_cache['data']), 200
+    # Fast path under the lock
+    with _router_status_lock:
+        cached = _router_status_cache['data']
+        cached_ts = _router_status_cache['ts']
+    if cached and now - cached_ts < ROUTER_STATUS_TTL:
+        return jsonify(cached), 200
+    # Slow path: hit the router OUTSIDE the lock (don't serialize all callers)
     try:
         result = current_adapter().get_status()
-        _router_status_cache['data'] = result
-        _router_status_cache['ts']   = now
+        with _router_status_lock:
+            _router_status_cache['data'] = result
+            _router_status_cache['ts']   = now
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'status': 'error', 'detail': sanitize_exception(e)}), 503

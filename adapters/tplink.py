@@ -7,17 +7,27 @@ Two firmware variants are handled automatically:
   - TPLinkMRClient    : standard RSA+AES firmware (most devices)
   - TPLinkMRClientGCM : AES-GCM firmware (newer devices / recent firmware updates)
 
-The adapter tries the standard variant first; if authorization fails it retries
-with the GCM variant. The chosen variant is cached for the lifetime of the
-adapter instance.
+The adapter tries the standard variant first; if it raises a *crypto/auth*
+error (not a network error) it retries with the GCM variant. Network errors
+(timeout, unreachable host) are surfaced immediately without retrying — the
+firmware variant has no bearing on reachability.
+
+The chosen variant is cached for the lifetime of the adapter instance.
 
 Username is always 'admin' (TP-Link MR web UI has no configurable username).
 """
 import logging
+import socket
 from datetime import datetime
-from .base import RouterAdapter, NotSupportedError
+from requests.exceptions import ConnectionError as ReqConnectionError, Timeout as ReqTimeout
+from .base import RouterAdapter
 
 log = logging.getLogger(__name__)
+
+
+# Errors that mean "couldn't reach the router" — no point retrying with a
+# different firmware variant.
+_NETWORK_EXCS = (ReqConnectionError, ReqTimeout, socket.timeout, socket.gaierror, OSError)
 
 
 class TplinkAdapter(RouterAdapter):
@@ -34,7 +44,13 @@ class TplinkAdapter(RouterAdapter):
     # ── Private helpers ──────────────────────────────────────────────────────
 
     def _get_client(self):
-        """Return an authorised client, auto-detecting firmware variant."""
+        """Return an authorised client, auto-detecting firmware variant.
+
+        - If the router is unreachable (network error), bail out immediately
+          with a clear ConnectionError — trying the other variant won't help.
+        - Otherwise, try the standard client first; on auth/crypto failure,
+          fall back to the GCM client. The successful class is cached.
+        """
         from tplinkrouterc6u import TPLinkMRClient, TPLinkMRClientGCM
         from tplinkrouterc6u.common.exception import ClientException, ClientError
 
@@ -44,7 +60,7 @@ class TplinkAdapter(RouterAdapter):
             else [TPLinkMRClient, TPLinkMRClientGCM]
         )
 
-        last_exc = None
+        auth_errors = []
         for cls in candidates:
             try:
                 client = cls(
@@ -59,12 +75,23 @@ class TplinkAdapter(RouterAdapter):
                     self._client_cls = cls
                     log.info("TP-Link firmware variant détectée : %s", cls.__name__)
                 return client
-            except (ClientException, ClientError, Exception) as e:
-                last_exc = e
+            except _NETWORK_EXCS as e:
+                # Router unreachable — no point trying the other variant
+                raise ConnectionError(
+                    f"Routeur TP-Link injoignable ({self._ip}) : {e}"
+                ) from e
+            except (ClientException, ClientError) as e:
+                # Auth/crypto error — try the next variant
+                auth_errors.append(f"{cls.__name__}: {e}")
+                continue
+            except Exception as e:
+                # Unknown error — also try the next variant but record it
+                auth_errors.append(f"{cls.__name__} (inattendu): {e}")
                 continue
 
         raise ConnectionError(
-            f"Impossible de se connecter au routeur TP-Link ({self._ip}) : {last_exc}"
+            f"Authentification TP-Link impossible ({self._ip}) — "
+            f"variantes essayées : {' | '.join(auth_errors)}"
         )
 
     @staticmethod

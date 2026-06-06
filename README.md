@@ -12,8 +12,8 @@ Interface web Flask pour envoyer et recevoir des SMS via un routeur **4G/5G** (H
 |--------------------|---------------|
 | ![Inbox](docs/inbox.png) | ![Outbox](docs/outbox.png) |
 
-| Configuration routeur |
-|-----------------------|
+| Configuration multi-routeurs |
+|------------------------------|
 | ![Config](docs/config.png) |
 
 ---

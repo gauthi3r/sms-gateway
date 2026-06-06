@@ -618,10 +618,13 @@
                 const d = await res.json();
                 if (d.status === 'ok') {
                     const bars = ['▱▱▱▱▱','▰▱▱▱▱','▰▰▱▱▱','▰▰▰▱▱','▰▰▰▰▱','▰▰▰▰▰'][Math.min(d.signal_bars, 5)];
+                    const brandLabel = _configCache?.config?.brand
+                        ? `<span>🔌 ${escapeHTML(_configCache.config.brand.charAt(0).toUpperCase() + _configCache.config.brand.slice(1))}</span>` : '';
                     el.innerHTML = `
                         <span>📶 ${bars}</span>
                         <span>📡 ${d.operator}</span>
                         <span>🌐 ${d.network}</span>
+                        ${brandLabel}
                     `;
                 } else {
                     el.innerHTML = '<span class="rs-error">⚠️ Routeur inaccessible</span>';

@@ -27,6 +27,7 @@ L'onglet **⚙️ Config** permet de connecter n'importe quel routeur 4G/5G supp
 | **Huawei** | B525s, B535, B818, B628, B715, E5186… | `huawei-lte-api` | ✅ | ✅ |
 | **Netgear** | LB1120, LB2120, LB1111, MR1100, MR2100… | `eternalegypt` | ✅ | ❌ |
 | **GL.iNet** | X3000, XE3000, X750 (Spitz), E750 (Mudi), MiFi, AP1300LTE… | `python-glinet` | ✅ | ❌ |
+| **TP-Link** | MR6400, MR600, MR500, MR200, Archer MR550, MR400, MR450… | `tplinkrouterc6u` | ✅ | ❌ |
 
 **Champs de connexion :**
 - **Adresse IP** du routeur sur le réseau local
@@ -78,7 +79,7 @@ Aller dans l'onglet **⚙️ Config**, renseigner la marque, l'IP et les identif
 >   "pass": "votre_mot_de_passe"
 > }
 > ```
-> Valeurs possibles pour `brand` : `huawei`, `netgear`, `glinet`.
+> Valeurs possibles pour `brand` : `huawei`, `netgear`, `glinet`, `tplink`.
 
 ---
 
@@ -92,7 +93,8 @@ Aller dans l'onglet **⚙️ Config**, renseigner la marque, l'IP et les identif
 │   ├── base.py            # Classe abstraite RouterAdapter
 │   ├── huawei.py          # Huawei LTE (huawei-lte-api)
 │   ├── netgear.py         # Netgear LTE (eternalegypt)
-│   └── glinet.py          # GL.iNet LTE/5G (python-glinet)
+│   ├── glinet.py          # GL.iNet LTE/5G (python-glinet)
+│   └── tplink.py          # TP-Link MR LTE (tplinkrouterc6u)
 ├── templates/index.html   # Frontend HTML/CSS/JS
 ├── static/favicon.svg
 ├── requirements.txt

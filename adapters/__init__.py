@@ -3,12 +3,14 @@ from .base import RouterAdapter, NotSupportedError
 from .huawei import HuaweiAdapter
 from .netgear import NetgearAdapter
 from .glinet import GlinetAdapter
+from .tplink import TplinkAdapter
 
 # Registry: brand slug → adapter class
 ADAPTERS: dict = {
     'huawei':  HuaweiAdapter,
     'netgear': NetgearAdapter,
     'glinet':  GlinetAdapter,
+    'tplink':  TplinkAdapter,
 }
 
 # Human-readable labels and field requirements for the config UI
@@ -26,6 +28,11 @@ ADAPTER_META: dict = {
     'glinet': {
         'label': 'GL.iNet LTE/5G (X3000, XE3000, X750, E750…)',
         'needs_user': True,
+        'supports_outbox': False,
+    },
+    'tplink': {
+        'label': 'TP-Link MR (MR6400, MR600, MR200, MR500…)',
+        'needs_user': False,
         'supports_outbox': False,
     },
 }
@@ -51,5 +58,7 @@ def get_adapter(config: dict) -> RouterAdapter:
         return NetgearAdapter(ip=ip, password=password)
     if brand == 'glinet':
         return GlinetAdapter(ip=ip, password=password, user=user)
+    if brand == 'tplink':
+        return TplinkAdapter(ip=ip, password=password)
 
     raise ValueError(f"Marque non implémentée : {brand!r}")

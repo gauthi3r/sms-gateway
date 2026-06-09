@@ -154,11 +154,10 @@ curl -s http://127.0.0.1:5000/router/status
 ```bash
 curl -s -X POST http://127.0.0.1:5000/send \
   -H "Content-Type: application/json" \
-  -H "X-CSRF-Token: <token>" \
   -d '{"number": "0600000000", "message": "Test 🎉"}'
 ```
 
-> The CSRF token is injected in the HTML page (`<meta name="csrf-token">`). For programmatic access from a trusted host, retrieve it first with `curl -s http://127.0.0.1:5000/ | grep csrf-token`.
+> No CSRF token required on `/send` — external integrations (Home Assistant, NUT, scripts) don't have access to the HTML page to retrieve a token. CSRF protection is intentionally disabled on this endpoint for LAN-only deployments. All other sensitive routes (`/config`, `/delete`, etc.) remain CSRF-protected.
 
 ---
 
@@ -180,11 +179,13 @@ curl -s -X POST http://127.0.0.1:5000/send \
 ```yaml
 rest_command:
   send_sms:
-    url: "http://<pi-ip>:5000/send?number={{ number }}&message={{ message }}"
-    method: GET
+    url: "http://<pi-ip>:5000/send"
+    method: POST
+    content_type: "application/json"
+    payload: '{"number": "{{ number }}", "message": "{{ message }}"}'
 ```
 
-> **Note:** GET requests expose the phone number and message in plain text in server access logs and browser history. This is acceptable for a **LAN-only deployment** (Raspberry Pi on a private network, not exposed to the internet). If your instance is publicly reachable, use POST with a CSRF token instead.
+> **Note:** GET requests expose the phone number and message in plain text in server access logs and browser history. POST JSON is recommended — the payload stays out of logs and URLs.
 
 Use cases: UPS alerts (NUT), Home Assistant automations, system monitoring, cron notifications, watchdog scripts.
 
